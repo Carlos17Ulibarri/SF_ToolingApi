@@ -1,31 +1,9 @@
-const {getConn} = require("../connection");
-const {clauses} = require("./soqlStructure");
+const {clauses,createQuery,sendQueryTA} = require('./soqlStructure');
 
 const today = new Date();
 
-const createQuery = (sObject,fields)=>{
-	const query = clauses.s + fields + clauses.f + sObject;
-	return query;
-};
-
-
-const sendQueryTA = async (qy)=>{
-	try {
-		const conn = await getConn();
-		const dataSO = await conn.tooling.query(qy);
-		const {done} = dataSO;
-		if(done){
-			return dataSO;
-		}
-	} catch (error) {
-		console.error(`Error al ejecutar la consulta Tooling [${qy}]:`, error);
-    throw error;
-	}
-};
-
 const getWorkFlowRules = async()=>{
 	const {object,fields} = require("../sObjects/WorkflowRule");
-	console.time(`===================== ${object}: Data Export Start =========================`);
 	const queryLh = createQuery(object,clauses.c + 'Id)');
 	const lh = await sendQueryTA(queryLh);
 	const {expr0} = lh.records[0];
@@ -75,23 +53,57 @@ const getWorkFlowRules = async()=>{
 			});
 		}
 	}
-	console.log(object + ': Total Records: ' + wrfIds.length);
-	console.log(object + ': Total Records Inactives: ' + recordsWfr.length);
-	console.log('Data WFR: ' + JSON.stringify(recordsWfr,null,2));
-	console.timeEnd(`===================== ${object}: Data Export End =========================`);
+	return recordsWfr;
 };
 
 const getLCB = async()=>{
-	const {object,fields} = require("../sObjects/LigthninhComponentBundle");
+	/*const {object,fields} = require("../sObjects/LigthninhComponentBundle");
 	console.time(`===================== ${object}: Data Export Start =========================`);
 	const queryLh = createQuery(object,clauses.c + 'Id)');
 	const lh = await sendQueryTA(queryLh);
 	const {expr0} = lh.records[0];
 	console.log(`${today}: controllers.getLCB: `);
 	console.log(`${object}.length: ${expr0}`);
-
+	console.log(object + ': Total Records: ' + wrfIds.length);*/
 };
 
+const exportExcel = async(object)=>{
+	const ExcelJs = require('exceljs');
+
+	const workBook = new ExcelJs.Workbook();
+	const workSheet = workBook.addWorksheet(object);
+
+	switch(object){
+		case 'WorkflowRules':
+			console.time(`===================== ${object}: Data Export Start =========================`);
+			const wfR = await getWorkFlowRules();
+			console.log(`${today}: controllers.exportExcell: `);
+			console.log(object + ': Total Records Inactives: ' + wfR.length);
+			workSheet.columns = [
+        { header: 'Id', key: 'Id', width: 15, style: { numFmt: '@' } },
+        { header: 'Name', key: 'Name', width: 25, style: { numFmt: '@' } },
+        { header: 'Object', key: 'object', width: 20, style: { numFmt: '@' } },
+        { header: 'Active', key: 'active', width: 18, style: { numFmt: '@' } }
+    	];
+			console.log('Data WFR: ' + JSON.stringify(wfR,null,2));
+			workSheet.addRows(wfR);
+			console.timeEnd(`===================== ${object}: Data Export End =========================`);
+			break;
+		default:
+	}
+
+	const path = 'C:\\Users\\HP\\Downloads\\';
+	const nameBook = path + 'Export_' + object + '.xlsx';
+	try {
+		await workBook.xlsx.writeFile(nameBook);
+
+	} catch (error) {
+		console.log(`${today}: controllers.exportExcell.error: ` + error);
+	}
+
+}
+
+
 module.exports = {
-    getWorkFlowRules,sendQueryTA,getLCB
+    getWorkFlowRules,sendQueryTA,getLCB,exportExcel
 };
